@@ -1,0 +1,72 @@
+#runtime "hsp3cl"
+#include "kernel32.as"
+#uselib "Iphlpapi.dll"
+#func IcmpSendEcho "IcmpSendEcho" int,int,int,int,int,int,int,int
+#cfunc IcmpCreateFile "IcmpCreateFile"
+#func IcmpCloseHandle "IcmpCloseHandle" int
+#func IcmpParseReplies "IcmpParseReplies" int,int
+mes "WAN IP addr finder ver 1.00"
+sdim fname4exe,4096
+GetModuleFileNameA 0,varptr(fname4exe),varsize(fname4exe)
+hicmp=IcmpCreateFile()
+ipaddressstr_=""+dir_cmdline//"111.238.24.160/10"
+repeat:if strmid(ipaddressstr_,0,1)=" "{ipaddressstr_=strmid(ipaddressstr_,1,strlen(ipaddressstr_))}else{break}:loop
+//ipaddressstr="1.1.1.1"
+if ipaddressstr_=""{mes "Usage: "+getpath(fname4exe,1+8)+" [IP Address]/[Subnetmask]\neg. "+getpath(fname4exe,1+8)+" 192.0.2.1/24":end}
+split ipaddressstr_,"/",ipaddressstr_r
+split ipaddressstr_r(0),".",ipaddressstr_2
+cidrsize=int(ipaddressstr_r(1))
+cidrcnta=1:if cidrsize<8{if cidrsize<0{cidrcnta=256}else{cidrcnta=1<<(8-((cidrsize-0)&7))}}
+cidrcntb=1:if cidrsize<16{if cidrsize<8{cidrcntb=256}else{cidrcntb=1<<(8-((cidrsize-8)&7))}}
+cidrcntc=1:if cidrsize<24{if cidrsize<16{cidrcntc=256}else{cidrcntc=1<<(8-((cidrsize-16)&7))}}
+cidrcntd=1:if cidrsize<32{if cidrsize<24{cidrcntd=256}else{cidrcntd=1<<(8-((cidrsize-24)&7))}}
+ipaddressstr_2(0)=str(int(ipaddressstr_2(0))&(0xff^(cidrcnta-1)))
+ipaddressstr_2(1)=str(int(ipaddressstr_2(1))&(0xff^(cidrcntb-1)))
+ipaddressstr_2(2)=str(int(ipaddressstr_2(2))&(0xff^(cidrcntc-1)))
+ipaddressstr_2(3)=str(int(ipaddressstr_2(3))&(0xff^(cidrcntd-1)))
+mes "start searching for "+ipaddressstr_
+repeat cidrcnta
+cnt4=cnt
+repeat cidrcntb
+cnt3=cnt
+repeat cidrcntc
+cnt2=cnt
+repeat cidrcntd
+ipaddressstr=str(int(ipaddressstr_2(0))+cnt4)+"."+str(int(ipaddressstr_2(1))+cnt3)+"."+str(int(ipaddressstr_2(2))+cnt2)+"."+str(int(ipaddressstr_2(3))+cnt)
+split ipaddressstr,".",ipaddressstr2
+ipaddress=((int(ipaddressstr2(0))<<0)|(int(ipaddressstr2(1))<<8)|(int(ipaddressstr2(2))<<16)|(int(ipaddressstr2(3))<<24))
+sdim requireddata,4096
+sdim replybuffer,4096
+sdim replybuffer2,4096
+sdim RequestOptions,4096
+sdim RequestOptions2,4096
+poke RequestOptions,0,255
+poke RequestOptions,1,0
+poke RequestOptions,2,0x01
+poke RequestOptions,3,32
+//lpoke RequestOptions,4,varptr(RequestOptions2)
+poke requireddata,0,8
+poke requireddata,1,0
+wpoke requireddata,2,0
+wpoke requireddata,4,0x100
+wpoke requireddata,6,0xb51e
+sumcalc=0
+repeat 32/2
+sumcalc^=wpeek(requireddata,2*cnt)
+loop
+wpoke requireddata,2,0xffff^sumcalc
+lpoke RequestOptions,4,varptr(requireddata)
+IcmpSendEcho hicmp,ipaddress,varptr(requireddata),32,0,varptr(replybuffer),varsize(replybuffer),5
+//dupptr replybuffer2,lpeek(replybuffer,16),wpeek(replybuffer,12),2
+IcmpParseReplies varptr(replybuffer),4096
+//mes stat
+if lpeek(replybuffer,8)<=1 and lpeek(replybuffer,4)=0{mes ipaddressstr}
+//mes lpeek(replybuffer,4)
+await
+loop
+loop
+loop
+loop
+//mes lpeek(replybuffer,4)
+//mes stat
+IcmpCloseHandle hicmp
